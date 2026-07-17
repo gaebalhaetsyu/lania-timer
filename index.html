@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<!-- 노션 임베드 카드 폭에 맞춰 반응형으로 동작하도록 뷰포트 설정 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KIA 타이거즈 타이머</title>
+<style>
+  /* ============================================================
+     0. 색상 변수 정의 (KIA 타이거즈 아이덴티티)
+     - 라이트 모드 기본값과 다크 모드(@media prefers-color-scheme) 값을
+       CSS 변수로 분리해 두어, 노션의 라이트/다크 테마 어디서든
+       자연스럽게 어우러지도록 함
+     ============================================================ */
+  :root {
+    --kia-red: #EA0029;      /* 메인 포인트 컬러 */
+    --kia-black: #111111;    /* 세련된 블랙 */
+    --kia-white: #FFFFFF;    /* 화이트 */
+    --kia-silver: #F5F5F5;   /* 화이트 계열 실버 */
+
+    --bg: var(--kia-white);       /* 페이지 배경(투명 처리되므로 실사용은 거의 없음) */
+    --surface: var(--kia-silver); /* 위젯 카드 배경 */
+    --text: var(--kia-black);     /* 기본 텍스트 색상 */
+    --track: #e2e2e2;             /* 진행률 링의 비활성 트랙 색상 */
+    --shadow: rgba(0, 0, 0, 0.12);/* 카드 그림자 */
+  }
+
+  /* 노션 다크 모드 대응: 시스템/브라우저가 다크 테마일 때 색상 재정의 */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111111;
+      --surface: #1c1c1c;
+      --text: #F5F5F5;
+      --track: #333333;
+      --shadow: rgba(0, 0, 0, 0.55);
+    }
+  }
+
+  /* ============================================================
+     1. 레이아웃 기본값
+     ============================================================ */
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+  }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* 배경은 투명하게 두어 노션 페이지 자체의 배경(라이트/다크)이 비치도록 함 */
+    background: transparent;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+      "Pretendard", "Malgun Gothic", sans-serif;
+  }
+
+  /* ============================================================
+     2. 위젯 카드
+     ============================================================ */
+  .widget {
+    position: relative; /* 완료 시 붉은 점멸 오버레이(::after)의 기준 좌표 */
+    width: 100%;
+    max-width: 360px;
+    margin: 16px;
+    padding: 28px 24px 26px;
+    background: var(--surface);
+    color: var(--text);
+    border-radius: 20px;
+    box-shadow: 0 8px 24px var(--shadow);
+    text-align: center;
+    overflow: hidden;
+    border: 2px solid transparent;
+    transition: border-color 0.3s ease;
+  }
+
+  /* 완료 시 카드 전체를 붉은색으로 점멸시키는 오버레이 레이어 */
+  .widget::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--kia-red);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* data-state="done" 일 때만 점멸 애니메이션 활성화 */
+  .widget[data-state="done"] {
+    animation: blink-border 1s ease-in-out infinite;
+  }
+  .widget[data-state="done"]::after {
+    animation: blink-overlay 1s ease-in-out infinite;
+  }
+
+  @keyframes blink-overlay {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 0.35; }
+  }
+  @keyframes blink-border {
+    0%, 100% { border-color: var(--kia-red); }
+    50% { border-color: var(--kia-black); }
+  }
+
+  /* KIA 타이거즈 워드마크 영역 */
+  .wordmark {
+    font-weight: 800;
+    letter-spacing: 2px;
+    font-size: clamp(14px, 4vw, 18px);
+    color: var(--kia-red);
+    margin: 0 0 2px;
+  }
+  .subtitle {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--text);
+    opacity: 0.55;
+    margin: 0 0 18px;
+  }
+
+  /* ============================================================
+     3. 완료 시에만 등장하는 알람 아이콘 + "완료!" 배지
+     ============================================================ */
+  .alarm-icon {
+    display: none; /* 평소에는 숨김, 완료 상태에서만 표시 */
+    font-size: 38px;
+    margin-bottom: 4px;
+  }
+  .widget[data-state="done"] .alarm-icon {
+    display: block;
+    /* 좌우/위아래로 흔들리며 통통 튀는 바운싱 애니메이션 */
+    animation: bounce-shake 0.6s ease-in-out infinite;
+  }
+
+  @keyframes bounce-shake {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    10% { transform: translate(-4px, -6px) rotate(-8deg); }
+    20% { transform: translate(4px, -10px) rotate(8deg); }
+    30% { transform: translate(-6px, -3px) rotate(-10deg); }
+    40% { transform: translate(6px, -9px) rotate(9deg); }
+    50% { transform: translate(-4px, 0) rotate(-6deg); }
+    60% { transform: translate(4px, -6px) rotate(6deg); }
+    70% { transform: translate(-3px, -3px) rotate(-4deg); }
+    80% { transform: translate(3px, -5px) rotate(4deg); }
+    90% { transform: translate(-2px, 0) rotate(-2deg); }
+  }
+
+  .done-badge {
+    display: none; /* 평소 숨김 */
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #fff;
+    background: var(--kia-red);
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 4px 14px;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px var(--shadow);
+    z-index: 2;
+  }
+  .widget[data-state="done"] .done-badge {
+    display: block;
+  }
+
+  /* ============================================================
+     4. 원형 진행률 링 + 고정폭 MM:SS 표시
+     ============================================================ */
+  .ring-wrap {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 0 auto 22px;
+  }
+  .ring-wrap svg {
+    width: 100%;
+    height: 100%;
+    /* 12시 방향에서 시작하도록 회전 */
+    transform: rotate(-90deg);
+  }
+  .ring-track {
+    fill: none;
+    stroke: var(--track);
+    stroke-width: 12;
+  }
+  .ring-progress {
+    fill: none;
+    stroke: var(--kia-red);
+    stroke-width: 12;
+    stroke-linecap: round;
+    /* 1초 틱마다 부드럽게 줄어들도록 트랜지션 */
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  /* 남은 시간(MM:SS) 텍스트: 폰트 크기가 바뀌어도 자릿수 변화로
+     레이아웃이 흔들리지 않도록 고정폭 monospace + tabular-nums 적용 */
+  .time-display {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "Courier New", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums; /* 숫자 폭을 모두 동일하게 고정 */
+    font-size: clamp(32px, 9vw, 44px);
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--text);
+    width: 5ch; /* "00:00" 5글자 폭으로 고정 */
+    margin: 0 auto;
+  }
+  .widget[data-state="done"] .time-display {
+    color: var(--kia-red);
+  }
+
+  /* ============================================================
+     5. 분 입력 + 프리셋 버튼
+     ============================================================ */
+  .input-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .input-row label {
+    font-size: 13px;
+    opacity: 0.7;
+  }
+  #minutesInput {
+    width: 72px;
+    padding: 8px 10px;
+    font-size: 16px;
+    text-align: center;
+    border: 2px solid var(--track);
+    border-radius: 10px;
+    background: var(--bg);
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  #minutesInput:focus {
+    outline: none;
+    border-color: var(--kia-red);
+  }
+  #minutesInput:disabled {
+    opacity: 0.5;
+  }
+
+  .presets {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .preset-btn {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--track);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .preset-btn:hover:not(:disabled) {
+    border-color: var(--kia-red);
+    color: var(--kia-red);
+  }
+  .preset-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* ============================================================
+     6. 조작 버튼 (Start / Pause / Resume / Reset)
+     상태(data-state)에 따라 표시할 버튼만 노출
+     ============================================================ */
+  .actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .btn {
+    padding: 11px 22px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: filter 0.2s, transform 0.1s;
+  }
+  .btn:active { transform: scale(0.97); }
+
+  .btn-start, .btn-resume {
+    background: var(--kia-red);
+    color: #fff;
+  }
+  .btn-pause {
+    background: var(--kia-black);
+    color: #fff;
+  }
+  .btn-reset {
+    background: transparent;
+    color: var(--text);
+    border: 2px solid var(--track);
+  }
+  .btn:hover { filter: brightness(1.1); }
+
+  /* 상태별 버튼 노출 규칙 */
+  .widget[data-state="idle"] .btn-pause,
+  .widget[data-state="idle"] .btn-resume,
+  .widget[data-state="idle"] .btn-reset {
+    display: none;
+  }
+  .widget[data-state="running"] .btn-start,
+  .widget[data-state="running"] .btn-resume {
+    display: none;
+  }
+  .widget[data-state="paused"] .btn-start,
+  .widget[data-state="paused"] .btn-pause {
+    display: none;
+  }
+  .widget[data-state="done"] .btn-start,
+  .widget[data-state="done"] .btn-pause,
+  .widget[data-state="done"] .btn-resume {
+    display: none;
+  }
+
+  /* ============================================================
+     7. 하단 유틸리티 버튼 (소리 테스트 / 음소거 토글)
+     ============================================================ */
+  .utility {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+  }
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0.7;
+    cursor: pointer;
+  }
+  .icon-btn:hover { opacity: 1; color: var(--kia-red); }
+
+  .hint {
+    margin-top: 16px;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    opacity: 0.4;
+  }
+</style>
+</head>
+<body>
+
+  <!-- data-state 속성으로 idle / running / paused / done 네 가지 상태를 표현 -->
+  <div class="widget" id="widget" data-state="idle">
+
+    <!-- 완료 시에만 보이는 상단 뱃지 -->
+    <div class="done-badge">완료!</div>
+
+    <!-- 팀 워드마크 -->
+    <p class="wordmark">KIA TIGERS</p>
+    <p class="subtitle">TIMER</p>
+
+    <!-- 완료 시에만 등장해 바운싱하는 알람 아이콘 -->
+    <div class="alarm-icon" aria-hidden="true">⏰</div>
+
+    <!-- 원형 진행률 링 + 고정폭 MM:SS -->
+    <div class="ring-wrap">
+      <svg viewBox="0 0 220 220">
+        <circle class="ring-track" cx="110" cy="110" r="94"></circle>
+        <circle class="ring-progress" id="ringProgress" cx="110" cy="110" r="94"></circle>
+      </svg>
+      <!-- aria-live로 스크린리더 사용자에게도 남은 시간 변화 안내 -->
+      <div class="time-display" id="timeDisplay" aria-live="off">25:00</div>
+    </div>
+
+    <!-- 분 입력 -->
+    <div class="input-row">
+      <label for="minutesInput">분</label>
+      <input type="number" id="minutesInput" min="1" max="180" value="25" inputmode="numeric">
+    </div>
+
+    <!-- 포모도로 등 빠른 활용을 위한 프리셋 버튼 -->
+    <div class="presets" id="presets">
+      <button type="button" class="preset-btn" data-minutes="1">1분</button>
+      <button type="button" class="preset-btn" data-minutes="5">5분</button>
+      <button type="button" class="preset-btn" data-minutes="25">25분</button>
+      <button type="button" class="preset-btn" data-minutes="50">50분</button>
+    </div>
+
+    <!-- 조작 버튼: 상태에 맞춰 CSS가 표시/숨김을 토글함 -->
+    <div class="actions">
+      <button type="button" class="btn btn-start" id="startBtn">시작</button>
+      <button type="button" class="btn btn-pause" id="pauseBtn">일시정지</button>
+      <button type="button" class="btn btn-resume" id="resumeBtn">재개</button>
+      <button type="button" class="btn btn-reset" id="resetBtn">초기화</button>
+    </div>
+
+    <!-- 소리 테스트 / 음소거 토글 -->
+    <div class="utility">
+      <button type="button" class="icon-btn" id="testSoundBtn">🔊 소리 테스트</button>
+      <button type="button" class="icon-btn" id="muteBtn">🔔 소리 켜짐</button>
+    </div>
+
+    <p class="hint">Space: 시작/일시정지·재개 · R: 초기화</p>
+  </div>
+
+<script>
+  /* ============================================================
+     0. DOM 참조
+     ============================================================ */
+  const widgetEl = document.getElementById('widget');
+  const timeDisplayEl = document.getElementById('timeDisplay');
+  const ringProgressEl = document.getElementById('ringProgress');
+  const minutesInputEl = document.getElementById('minutesInput');
+  const presetButtons = document.querySelectorAll('.preset-btn');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const testSoundBtn = document.getElementById('testSoundBtn');
+  const muteBtn = document.getElementById('muteBtn');
+
+  /* ============================================================
+     1. 진행률 링 초기화 (원 둘레 계산)
+     ============================================================ */
+  const RING_RADIUS = 94;
+  const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+  ringProgressEl.style.strokeDasharray = String(RING_CIRCUMFERENCE);
+  ringProgressEl.style.strokeDashoffset = '0';
+
+  /* ============================================================
+     2. 상태 변수
+     - state: 'idle' | 'running' | 'paused' | 'done'
+     ============================================================ */
+  let state = 'idle';
+  let totalSeconds = 0;
+  let remainingSeconds = 0;
+  let timerId = null;
+  let isMuted = false;
+  let audioCtx = null;
+
+  /* ============================================================
+     3. localStorage 로 마지막 입력값 / 음소거 여부 복원
+     ============================================================ */
+  const STORAGE_KEY_MINUTES = 'kiaTimerMinutes';
+  const STORAGE_KEY_MUTED = 'kiaTimerMuted';
+
+  (function restoreFromStorage() {
+    const savedMinutes = localStorage.getItem(STORAGE_KEY_MINUTES);
+    if (savedMinutes && !isNaN(parseInt(savedMinutes, 10))) {
+      minutesInputEl.value = clampMinutes(parseInt(savedMinutes, 10));
+    }
+    const savedMuted = localStorage.getItem(STORAGE_KEY_MUTED);
+    if (savedMuted === 'true') {
+      isMuted = true;
+    }
+    updateMuteButtonUI();
+  })();
+
+  /* 입력값을 1~180 범위로 보정 */
+  function clampMinutes(value) {
+    if (isNaN(value) || value < 1) return 1;
+    if (value > 180) return 180;
+    return value;
+  }
+
+  function getMinutesFromInput() {
+    const value = clampMinutes(parseInt(minutesInputEl.value, 10));
+    minutesInputEl.value = value;
+    return value;
+  }
+
+  /* 입력값이 바뀔 때마다 마지막 값으로 저장 */
+  minutesInputEl.addEventListener('change', () => {
+    const value = getMinutesFromInput();
+    localStorage.setItem(STORAGE_KEY_MINUTES, String(value));
+    if (state === 'idle' || state === 'done') {
+      // 시작 전/완료 후에는 입력값 변경 시 표시되는 시간도 즉시 갱신
+      totalSeconds = value * 60;
+      remainingSeconds = totalSeconds;
+      render();
+    }
+  });
+
+  /* ============================================================
+     4. 화면 렌더링 (MM:SS 텍스트 + 진행률 링)
+     ============================================================ */
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return m + ':' + s;
+  }
+
+  function render() {
+    timeDisplayEl.textContent = formatTime(remainingSeconds);
+    const ratio = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
+    // 남은 비율만큼 링이 채워져 보이도록 dashoffset 계산 (0 = 가득 참, 둘레 = 텅 빔)
+    ringProgressEl.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - ratio));
+  }
+
+  /* ============================================================
+     5. 상태 전환 + 컨트롤 활성/비활성 처리
+     ============================================================ */
+  function setState(newState) {
+    state = newState;
+    widgetEl.dataset.state = newState;
+    const lockInputs = (state === 'running' || state === 'paused');
+    minutesInputEl.disabled = lockInputs;
+    presetButtons.forEach((btn) => { btn.disabled = lockInputs; });
+  }
+
+  /* ============================================================
+     6. 타이머 동작 (시작 / 일시정지 / 재개 / 초기화)
+     ============================================================ */
+  function tick() {
+    remainingSeconds -= 1;
+    if (remainingSeconds <= 0) {
+      remainingSeconds = 0;
+      render();
+      completeTimer();
+      return;
+    }
+    render();
+  }
+
+  function startTimer() {
+    totalSeconds = getMinutesFromInput() * 60;
+    remainingSeconds = totalSeconds;
+    render();
+    setState('running');
+    ensureAudioContext(); // 사용자 제스처 시점에 오디오 컨텍스트 준비
+    timerId = setInterval(tick, 1000);
+  }
+
+  function pauseTimer() {
+    clearInterval(timerId);
+    timerId = null;
+    setState('paused');
+  }
+
+  function resumeTimer() {
+    setState('running');
+    timerId = setInterval(tick, 1000);
+  }
+
+  function resetTimer() {
+    clearInterval(timerId);
+    timerId = null;
+    totalSeconds = getMinutesFromInput() * 60;
+    remainingSeconds = totalSeconds;
+    setState('idle');
+    render();
+  }
+
+  function completeTimer() {
+    clearInterval(timerId);
+    timerId = null;
+    setState('done');
+    playChime(); // C-E-G-C 아르페지오 알림음 재생
+  }
+
+  /* ============================================================
+     7. Web Audio API - 맑고 차분한 피아노 톤 아르페지오
+     - 외부 오디오 파일 없이 오실레이터로 직접 화음을 합성
+     ============================================================ */
+  function ensureAudioContext() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+  }
+
+  function playChime() {
+    if (isMuted) return;
+    ensureAudioContext();
+
+    const ctx = audioCtx;
+    const now = ctx.currentTime;
+    // C5 - E5 - G5 - C6 아르페지오 (주파수, Hz)
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    const noteGap = 0.18; // 음 사이 간격(초) - 아르페지오 느낌
+
+    notes.forEach((freq, i) => {
+      const startTime = now + i * noteGap;
+      const osc = ctx.createOscillator();
+      osc.type = 'sine'; // 배음이 적은 사인파로 맑고 차분한 피아노 느낌 연출
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.3, startTime + 0.02); // 짧은 어택
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.9); // 자연스러운 디케이
+
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 1.0);
+    });
+  }
+
+  /* 소리 테스트 버튼: 언제든 동일한 알림음을 미리 들어볼 수 있음 */
+  testSoundBtn.addEventListener('click', () => {
+    ensureAudioContext();
+    playChime();
+  });
+
+  /* 음소거 토글 */
+  function updateMuteButtonUI() {
+    muteBtn.textContent = isMuted ? '🔕 소리 꺼짐' : '🔔 소리 켜짐';
+  }
+  muteBtn.addEventListener('click', () => {
+    isMuted = !isMuted;
+    localStorage.setItem(STORAGE_KEY_MUTED, String(isMuted));
+    updateMuteButtonUI();
+  });
+
+  /* ============================================================
+     8. 버튼 / 프리셋 이벤트 바인딩
+     ============================================================ */
+  startBtn.addEventListener('click', startTimer);
+  pauseBtn.addEventListener('click', pauseTimer);
+  resumeBtn.addEventListener('click', resumeTimer);
+  resetBtn.addEventListener('click', resetTimer);
+
+  presetButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const minutes = parseInt(btn.dataset.minutes, 10);
+      minutesInputEl.value = minutes;
+      localStorage.setItem(STORAGE_KEY_MINUTES, String(minutes));
+      if (state === 'idle' || state === 'done') {
+        totalSeconds = minutes * 60;
+        remainingSeconds = totalSeconds;
+        setState('idle');
+        render();
+      }
+    });
+  });
+
+  /* ============================================================
+     9. 키보드 단축키
+     - Space: 시작 / 일시정지 / 재개 토글
+     - R: 초기화
+     - 입력창에 포커스가 있을 때는 단축키를 무시해 타이핑을 방해하지 않음
+     ============================================================ */
+  document.addEventListener('keydown', (e) => {
+    const isTypingInInput = document.activeElement === minutesInputEl;
+    if (isTypingInInput) return;
+
+    if (e.code === 'Space') {
+      e.preventDefault(); // 스페이스바의 기본 스크롤 동작 방지
+      if (state === 'idle') startTimer();
+      else if (state === 'running') pauseTimer();
+      else if (state === 'paused') resumeTimer();
+    } else if (e.key === 'r' || e.key === 'R') {
+      resetTimer();
+    }
+  });
+
+  /* ============================================================
+     10. 초기 렌더링
+     ============================================================ */
+  totalSeconds = getMinutesFromInput() * 60;
+  remainingSeconds = totalSeconds;
+  setState('idle');
+  render();
+</script>
+
+</body>
+</html>
